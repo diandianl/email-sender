@@ -1,0 +1,8 @@
+{
+  "host": "smtp.163.com",
+  "port": 465,
+  "username": "helloworld_hyx@163.com",
+  "password": "--PASSWORLD--",
+  "from": "helloworld_hyx@163.com",
+  "interval": 200
+}
