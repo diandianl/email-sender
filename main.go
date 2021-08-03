@@ -61,12 +61,18 @@ func init() {
 	flag.StringVar(&template, "template", "", "邮件模板")
 
 	flag.BoolVar(&debug, "debug", false, "debug mode print detail log")
+	flag.BoolVar(&help, "help", false, "print help info")
 }
 
 func main() {
 	logDebug("参数列表: %s", os.Args[1:])
 
 	flag.Parse()
+
+	if help {
+		usage()
+		return
+	}
 
 	if flag.NArg() < 1 {
 		log.Fatal("请提供 Excel 数据文件")
@@ -366,4 +372,63 @@ func validEmailAddress(addr string) bool {
 	return err == nil && a != nil
 }
 
+func usage() {
+	fmt.Print(`
+	批量邮件发送助手 v0.1
 
+	使用方式：
+		email-sender.exe [--debug] --config config.json [--content content.txt | --template template.tpl] test.xlsx
+
+	选项说明：
+	
+	--debug 打印详细信息
+	
+	--help 显示此帮助信息
+
+	--config 指定配置文件路径
+
+	--content 指定邮件内容文件路径，文件内容可以包含 html； 与 --template 选项冲突，只能使用一个
+	
+	--template 指定邮件内容模板文件路径，文件内容可以包含 html； 与 --content 选项冲突，只能使用一个
+
+	配置文件参考：
+	{
+	  "host": "smtp.163.com",
+	  "port": 465,
+	  "username": "helloworld_hyx@163.com",
+	  "password": "--PASSWORLD--",
+	  "from": "helloworld_hyx@163.com",
+	  "interval": 200,
+	  "sender": "fake"
+	}
+	
+	邮件内容文件：
+	
+	邮件模板文件：
+	模板文件中可以使用 {{ .Xxxx }} 的语法访问 Excel 文件中自定义的其他列
+
+	Excel 源文件说明：
+	目前支持两种格式
+	固定格式：
+	SendTo, Subject, Content
+	+-------------------------------------------------------+
+	| helloworld_hyx@163.com  | Subject1 | Optional content |
+	+-------------------------------------------------------+
+	| helloworld_hyx@qq.com  | Subject2                     |
+	+-------------------------------------------------------+
+	
+	* Content 是可以选的，如果内容不为空则替代 --content / --template 选项指定的内容
+
+	或者带表头的格式：
+	+---------------+----------+---------+-----+
+	|    SendTo     | Subject  | Content | Xxx |
+	+---------------+----------+---------+-----+
+	| abc@hello.com | Subject1 |         |   1 |
+	| def@hello.com | Subject2 | abc     |   2 |
+	+---------------+----------+---------+-----+
+
+	* 表格头（SendTo，Subject，Content）为内置名称，除了 Content 外，都必须提供，顺序无所谓
+	* Content 是可以选的，如果内容不为空则替代 --content / --template 选项指定的内容
+	* Xxx 可以是任意的，并且可以有多个，可以在模板文件中访问
+`)
+}
