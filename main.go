@@ -35,6 +35,7 @@ type Config struct {
 	Password string `json:"password"`
 	From string `json:"from"`
 	Interval int64 `json:"interval"`
+	Sender string `json:"sender"`
 }
 
 var (
@@ -104,13 +105,17 @@ func main() {
 }
 
 func sendEmails(cfg *Config, list []*Send, contentProvider ContentProvider) {
-	d := gomail.NewDialer(cfg.Host, cfg.Port, cfg.Username, cfg.Password)
-	d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 
-	sender, err := d.Dial()
+	sender, err := getSender(cfg)
 	if err != nil {
-		log.Fatalf("连接服务器异常: %s\n", err)
+		log.Fatalf("创建 Sender 失败：%s", err)
 	}
+
+	defer func() {
+		if closer, ok := sender.(io.Closer); ok {
+			closer.Close()
+		}
+	}()
 
 	m := gomail.NewMessage()
 
@@ -137,7 +142,6 @@ func sendEmails(cfg *Config, list []*Send, contentProvider ContentProvider) {
 		}
 	}
 }
-
 
 func loadSendList(file string) ([]*Send, error) {
 	excel, err := xlsx.OpenFile(file)
@@ -220,9 +224,13 @@ func getRowParser(first *xlsx.Row) (bool, func(row *xlsx.Row) (*Send, error), er
 				}
 			default:
 				logDebug("Meta Cell: %s", cell.Value)
+				key := cell.Value
 				handlers[i] = func(val string, send *Send) error {
 					if len(val) > 0 {
-						send.Meta[cell.Value] = val
+						if send.Meta == nil {
+							send.Meta = map[string]string{}
+						}
+						send.Meta[key] = val
 					}
 					return nil
 				}
@@ -277,6 +285,7 @@ func getContentProvider(content, template string) (ContentProvider, error) {
 	}
 
 	if len(content) > 0 {
+		logDebug("从 %s 中读取邮件内容", content)
 		data, err := readFileContent(content)
 		if err != nil {
 			log.Fatalf("读取邮件内容文件失败：%s", err)
@@ -293,7 +302,8 @@ func getContentProvider(content, template string) (ContentProvider, error) {
 		}, nil
 
 	} else {
-		data, err := readFileContent(content)
+		logDebug("从 %s 中读取邮件内容", template)
+		data, err := readFileContent(template)
 		if err != nil {
 			log.Fatalf("读取邮件模板文件失败：%s", err)
 		}
@@ -306,10 +316,29 @@ func getContentProvider(content, template string) (ContentProvider, error) {
 		logDebug("使用邮件模板 %s: %s", contentType, string(data))
 
 		return func(data interface{}) (s string, f func(writer io.Writer) error) {
+			logDebug("Template Data: %+v", data)
 			return contentType, func(w io.Writer) error {
 				return t.Execute(w, data)
 			}
 		}, nil
+	}
+}
+
+func getSender(cfg *Config) (gomail.Sender, error) {
+	switch cfg.Sender {
+	case "fake":
+		return gomail.SendFunc(func(from string, to []string, msg io.WriterTo) error {
+			var buffer bytes.Buffer
+			if _, err := msg.WriteTo(&buffer); err != nil {
+				return err
+			}
+			log.Printf("%s Send email to %s: %s", from, to, buffer.String())
+			return nil
+		}), nil
+	default:
+		d := gomail.NewDialer(cfg.Host, cfg.Port, cfg.Username, cfg.Password)
+		d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+		return d.Dial()
 	}
 }
 

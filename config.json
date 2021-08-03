@@ -4,5 +4,6 @@
   "username": "helloworld_hyx@163.com",
   "password": "--PASSWORLD--",
   "from": "helloworld_hyx@163.com",
-  "interval": 200
+  "interval": 200,
+  "sender": "fake"
 }
